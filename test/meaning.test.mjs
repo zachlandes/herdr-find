@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { JEV_ENDPOINT, jevEndpoint } from "../lib/meaning/jev.mjs";
 import { createRedactor } from "../lib/meaning/redaction.mjs";
-import { LEDGER_FILE, recordRun, searchByMeaning } from "../lib/meaning/search.mjs";
+import { costBoundUsd, LEDGER_FILE, MEANING, recordRun, searchByMeaning, spentInLastDay } from "../lib/meaning/search.mjs";
 import { startStandin } from "./support/jev-standin.mjs";
 
 const key = Object.freeze(Object.defineProperty({ source: "test" }, "authorization", { value: "Bearer test-key-not-real", enumerable: false }));
@@ -109,6 +109,26 @@ test("a busy service is retried, and the ledger records counts, never words or t
     const ledger = readFileSync(path.join(stateDir, LEDGER_FILE), "utf8");
     assert.doesNotMatch(ledger, /spend each|dollars|test-key/);
     assert.match(ledger, /"query_chars":21/);
+  });
+});
+
+test("a search books what it spends as it goes, so one killed before it ends still counts toward the day", async () => {
+  await withStandin({ judge: () => 0.1 }, async ({ standin, stateDir }) => {
+    const result = await search(standin, stateDir, { experiment: { ...MEANING, batch: 1, inFlight: 1 }, items: items(["one", "two", "three"]) });
+    assert.equal(standin.bodies.length, 3);
+    // No end-of-run record, as when fzf kills the search
+    assert.ok(spentInLastDay(stateDir) >= result.run.spend.committed_usd);
+    recordRun(stateDir, result.run);
+    assert.equal(spentInLastDay(stateDir), result.run.spend.committed_usd);
+  });
+});
+
+test("the cost bound covers every request a search sends", async () => {
+  await withStandin({ judge: () => 0.9 }, async ({ standin, stateDir }) => {
+    const texts = Array.from({ length: 40 }, (_, index) => `Line one of message ${index}. Line two says more. ${"words ".repeat(index * 20)}`);
+    const result = await search(standin, stateDir, { capUsd: 1, dailyCapUsd: 1, items: items(texts) });
+    assert.ok(result.found.length > 1);
+    assert.ok(result.run.spend.committed_usd <= costBoundUsd(items(texts)));
   });
 });
 

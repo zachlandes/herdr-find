@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
-import { act, EXACT_SHELL, exactTerms, fzfArgs, handleKey } from "../lib/picker.mjs";
+import { act, EXACT_SHELL, exactTerms, fzfArgs, handleKey, startActions } from "../lib/picker.mjs";
+import { recordRun } from "../lib/meaning/search.mjs";
 import { createRun, loadState, removeRun } from "../lib/run.mjs";
 import { makeWorld } from "./support/world.mjs";
 import { startStandin } from "./support/jev-standin.mjs";
@@ -36,6 +37,25 @@ async function picker(world, run) {
     removeRun(dir);
   }
 }
+
+test("before a meaning search, the most it can cost is capped by what is left of today", async () => {
+  const world = makeWorld({ meaning: { endpoint: "http://127.0.0.1:9/v1/systemone" } });
+  try {
+    recordRun(world.env.HERDR_FIND_STATE_DIR, { at: new Date().toISOString(), spend: { committed_usd: 0.1995 } });
+    await picker(world, async ({ key }) => {
+      assert.match(await key("scope", ["w2-p1"]), /all open agents/);
+      assert.match(await key("meaning", [], ""), /up to USD 0\.0005 · caps USD 0\.02\/search, USD 0\.20\/day \(USD 0\.0005 left\)/);
+    });
+  } finally {
+    world.cleanup();
+  }
+});
+
+test("words given when the picker opens in exact mode are searched exactly from the start", () => {
+  assert.match(startActions("/x/herdr-find", "exact", "spend cap"), /rebind\(change\)\+search\('spend 'cap\)/);
+  assert.doesNotMatch(startActions("/x/herdr-find", "exact", ""), /search/);
+  assert.doesNotMatch(startActions("/x/herdr-find", "fuzzy", "spend cap"), /search/);
+});
 
 test("ctrl-s cycles fuzzy, exact and meaning, and the words stay in the box", async () => {
   const world = makeWorld();
@@ -86,7 +106,7 @@ test("in meaning mode enter runs the search, and the words move from the box to 
   try {
     await picker(world, async ({ key, state }) => {
       const ask = await key("meaning", [], "what was the daily limit");
-      assert.match(ask, /Type what you mean, then press enter · 6 messages · (under|about) USD/);
+      assert.match(ask, /Type what you mean, then press enter · 6 messages · up to USD 0\.\d+ · caps USD 0\.02\/search, USD 0\.20\/day \(USD 0\.20 left\)/);
       assert.equal(await key("enter", [], ""), "ignore");
       const run = await key("enter", [], "what was the daily limit");
       assert.match(run, /change-prompt\(filter> \)/);

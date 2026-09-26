@@ -89,7 +89,9 @@ Until then, meaning mode says which of these is missing.
 ### What is sent, and what is not
 
 - Sent: the words you typed and the text of the messages in the scope you chose, after redaction.
-- Never sent: pane or session ids, file paths, your machine's name or folder names; each message goes under a number that only means something inside that one request.
+- Not added by herdr-find: pane or session ids, file names, your machine's name or folder names; each message goes under a number that only means something inside that one request.
+- Messages that mention paths, folder names, your machine's name or user name are sent as they are, unless your redaction list replaces them.
+  Shell prompts and agent conversations often do, so add your home folder and machine name to your list if they should not leave your machine.
 - Before anything is sent, secret-looking text is replaced: API keys, tokens, `Authorization` headers, passwords in `name=value` pairs, private keys, passwords in URLs, email addresses and long random-looking strings.
   Your own list then replaces what no pattern can know, such as names, customers and internal hosts; see [`examples/redaction.json`](examples/redaction.json).
   Its `forbidden` patterns are a last check: if one still matches after redaction, that request is not sent.
@@ -97,8 +99,9 @@ Until then, meaning mode says which of these is missing.
 
 ### What it costs
 
-Meaning mode shows how many messages the scope holds and the most the search could cost before you press enter.
 Each search stops at a spend cap (USD 0.02 by default), and each day has one too (USD 0.20), both set in `config.json`.
+Before you press enter, meaning mode shows how many messages the scope holds, the most the search can cost, and both caps with what is left of today's, for example `up to USD 0.013 · caps USD 0.02/search, USD 0.20/day (USD 0.187 left)`.
+The most it can cost is the smallest of what those messages could cost, the search cap, and what is left of today's cap.
 Messages are read newest first, so when a search reaches its cap it is the oldest that go unread, and the result says how many were read.
 
 For a sense of scale, measured on 2026-09-25 over nine open agents holding about 1,000 messages between them: the first matches showed after about 0.4 s, the whole search took 5 to 8 s, and each search cost about USD 0.013.
@@ -108,7 +111,6 @@ Fuzzy and exact search over the same nine agents open in about half a second and
 
 ```sh
 herdr-find list --scope all                    # print what would be searched
-herdr-find meaning --scope all "words" [--json] # search by meaning and print the matches
 herdr-find --scope agent:reviewer --mode exact  # open the search on one agent, in exact mode
 ```
 

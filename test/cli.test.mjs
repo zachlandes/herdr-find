@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
+import { stripAnsi } from "../lib/gather.mjs";
+import { MeaningOffError, runMeaning } from "../lib/meaning/run.mjs";
+import { LEDGER_FILE, spentInLastDay } from "../lib/meaning/search.mjs";
+import { createRun, loadState, removeRun } from "../lib/run.mjs";
 import { startStandin } from "./support/jev-standin.mjs";
 import { BIN, makeWorld } from "./support/world.mjs";
 
@@ -37,13 +42,20 @@ test("this pane is the focused pane when herdr names none, and a shell pane is r
   }
 });
 
+async function meaningOver(world, scope, words) {
+  const dir = createRun({ contextPaneId: null, scope, mode: "meaning", env: world.env });
+  try {
+    return await runMeaning({ dir, state: loadState(dir), words, env: world.env });
+  } finally {
+    removeRun(dir);
+  }
+}
+
 test("meaning search is off by default and says where to turn it on, sending nothing", async () => {
   const standin = await startStandin();
   const world = makeWorld();
   try {
-    const { code, stderr } = await run(["meaning", "--scope", "all", "daily limit"], { ...world.env, HERDR_FIND_JEV_ENDPOINT: standin.url });
-    assert.equal(code, 3);
-    assert.match(stderr, /Meaning search is off\. Turn it on in .*config\.json/);
+    await assert.rejects(meaningOver(world, { type: "all" }, "daily limit"), (error) => error instanceof MeaningOffError && /Meaning search is off\. Turn it on in .*config\.json/.test(error.message));
     assert.equal(standin.bodies.length, 0);
   } finally {
     world.cleanup();
@@ -51,23 +63,50 @@ test("meaning search is off by default and says where to turn it on, sending not
   }
 });
 
-test("meaning search over one agent prints the ranked matches with the line to mark", async () => {
+test("meaning search over one agent gives the ranked matches with the line to mark, and books the run", async () => {
   const standin = await startStandin({
     judge: (search, text) => (text.includes("five dollars a day") ? 0.93 : 0.05),
     pick: (search, lines) => Math.max(0, lines.findIndex((line) => line.includes("five dollars")))
   });
   const world = makeWorld({ meaning: { endpoint: standin.url } });
   try {
-    const { code, stdout, stderr } = await run(["meaning", "--scope", "agent:reviewer", "--json", "how much may we spend daily"], world.env);
-    assert.equal(code, 0, stderr);
-    const result = JSON.parse(stdout);
-    assert.equal(result.messages, 6);
-    assert.match(result.found[0], /^ 93% reviewer +claude +Let's cap it at five dollars a day per workspace\./);
+    const reviewer = world.state.agents.find((agent) => agent.name === "reviewer");
+    const result = await meaningOver(world, { type: "agent", paneId: reviewer.pane_id }, "how much may we spend daily");
     assert.equal(result.run.read, 6);
-    assert.ok(!JSON.stringify(result.run).includes("spend daily"));
+    assert.match(stripAnsi(result.rows[0].split("\t").slice(2).join(" ")), /^ 93% reviewer +claude +Let's cap it at five dollars a day per workspace\./);
+    const ledger = readFileSync(path.join(world.env.HERDR_FIND_STATE_DIR, LEDGER_FILE), "utf8");
+    assert.ok(!ledger.includes("spend daily"));
+    assert.equal(spentInLastDay(world.env.HERDR_FIND_STATE_DIR), result.run.spend.committed_usd);
   } finally {
     world.cleanup();
     await standin.close();
+  }
+});
+
+test("there is no command that searches by meaning outside the picker", async () => {
+  const world = makeWorld();
+  try {
+    const { code, stderr } = await run(["meaning", "daily limit"], world.env);
+    assert.equal(code, 2);
+    assert.match(stderr, /unknown command meaning/);
+  } finally {
+    world.cleanup();
+  }
+});
+
+test("an agent whose conversation file this tool cannot read is searched through its pane", async () => {
+  const world = makeWorld();
+  try {
+    const rollout = path.join(world.root, "rollout.jsonl");
+    writeFileSync(rollout, `${JSON.stringify({ type: "user", message: { role: "user", content: "not a Claude line" } })}\n`);
+    world.state.agents.push({ agent: "codex", name: "codex", pane_id: "w1:p1", tab_id: "w1:t1", workspace_id: "w1", cwd: "/work/codex", agent_session: { agent: "codex", kind: "path", value: rollout } });
+    writeFileSync(world.env.FAKE_HERDR_STATE, JSON.stringify(world.state));
+    const { code, stdout } = await run(["list", "--scope", "agent:codex"], world.env);
+    assert.equal(code, 0);
+    assert.match(stdout, /codex +shell +error: failed to push some refs/);
+    assert.doesNotMatch(stdout, /not a Claude line/);
+  } finally {
+    world.cleanup();
   }
 });
 

@@ -3,7 +3,7 @@ import { readFileSync, utimesSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { shellBlocks } from "../lib/gather.mjs";
-import { claudeFolder, locateTranscript, parseClaude, parsePi, piFolder, readTranscript } from "../lib/transcripts.mjs";
+import { claudeFolder, locateTranscript, locateTranscripts, parseClaude, parsePi, piFolder, readTranscript } from "../lib/transcripts.mjs";
 import { makeWorld } from "./support/world.mjs";
 
 test("a Claude Code transcript gives what was said, without tool output or reasoning", () => {
@@ -63,6 +63,39 @@ test("transcripts are found by the path or id herdr reports, else guessed from t
     assert.equal(path.basename(guessed.file), "new.jsonl");
     assert.equal(guessed.guessed, true);
     assert.equal(locateTranscript({ agent: "codex", cwd: "/work/guess" }, env), null);
+  } finally {
+    world.cleanup();
+  }
+});
+
+test("a guess never takes the conversation another agent owns, whichever comes first", () => {
+  const world = makeWorld();
+  try {
+    const env = world.env;
+    const owner = { agent: "claude", cwd: "/work/shared", agent_session: { kind: "id", value: "owned-session" } };
+    const folder = path.join(env.HERDR_FIND_CLAUDE_DIR, claudeFolder(owner.cwd));
+    mkdirSync(folder, { recursive: true });
+    const older = path.join(folder, "older.jsonl");
+    writeFileSync(older, "");
+    writeFileSync(path.join(folder, "owned-session.jsonl"), "");
+    utimesSync(older, new Date(0), new Date(0));
+    const newcomer = { agent: "claude", cwd: owner.cwd };
+    assert.equal(locateTranscript(newcomer, env).file, locateTranscript(owner, env).file);
+    const [guess, owned, second] = locateTranscripts([newcomer, owner, { ...newcomer }], env);
+    assert.equal(owned.guessed, false);
+    assert.equal(guess.file, older);
+    assert.equal(guess.guessed, true);
+    assert.equal(second, null);
+  } finally {
+    world.cleanup();
+  }
+});
+
+test("only Claude Code and Pi conversation files are read, whatever herdr reports", () => {
+  const world = makeWorld();
+  try {
+    const file = world.agents.find((agent) => agent.kind === "claude").file;
+    assert.equal(locateTranscript({ agent: "codex", agent_session: { kind: "path", value: file } }, world.env), null);
   } finally {
     world.cleanup();
   }
