@@ -49,11 +49,13 @@ test("before a meaning search, the header shows the estimate, the search cap and
     recordRun(world.env.HERDR_FIND_STATE_DIR, { at: new Date().toISOString(), spend: { committed_usd: 0.0133 } });
     await picker(world, async ({ key }) => {
       const pane = headerLines(await key("meaning", [], ""));
-      assert.deepEqual(pane.slice(2), ["Type what you mean, then press enter · 6 messages", "under USD 0.001 · never more than USD 0.02 per search · USD 0.186 left today"]);
+      assert.deepEqual(pane.slice(2), ["Type what you mean, then press enter · 6 messages", "under USD 0.001 · never more than USD 0.02 per search", "USD 0.186 left today"]);
       const all = headerLines(await key("scope", ["w2-p1"]));
       assert.match(all[2], /38 messages$/);
-      assert.match(all[3], /^(under USD 0\.001|about USD 0\.\d{3}) · never more than USD 0\.02 per search · USD 0\.186 left today$/);
-      for (const line of [...pane, ...all]) assert.ok(line.length <= 76, line);
+      assert.match(all[3], /^(under USD 0\.001|about USD 0\.\d{3}) · never more than USD 0\.02 per search$/);
+      assert.equal(all[4], "USD 0.186 left today");
+      // fzf indents each header line by 2 columns inside a popup about 76 wide with a border
+      for (const line of [...pane, ...all]) assert.ok(2 + line.length <= 76 - 2, line);
     });
   } finally {
     world.cleanup();
@@ -237,7 +239,7 @@ test("in meaning mode enter runs the search, and the words move from the box to 
   try {
     await picker(world, async ({ key, state }) => {
       const ask = await key("meaning", [], "what was the daily limit");
-      assert.match(ask, /Type what you mean, then press enter · 6 messages\n.* · never more than USD 0\.02 per search · USD 0\.20 left today/);
+      assert.match(ask, /Type what you mean, then press enter · 6 messages\n.* · never more than USD 0\.02 per search\nUSD 0\.20 left today/);
       assert.equal(await key("enter", [], ""), "ignore");
       const run = await key("enter", [], "what was the daily limit");
       assert.match(run, /change-prompt\(filter> \)/);
