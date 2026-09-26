@@ -103,6 +103,15 @@ test("after a meaning search, the summary fits the popup and a small spend never
   }
 });
 
+test("the summary says the newest were read only when a cap or a stop left the oldest unread", () => {
+  const run = { items: 38, read: 22, stop: null, failed: 1, refused_by_redaction: 0, elapsed_ms: 1000, spend: { committed_usd: 0.001 }, caps: { day_usd: 0.2 } };
+  const failed = summary({ run, found: [1], closest: false }, "daily limit");
+  assert.match(failed, /1 found in 22 of 38 messages read · 1 request failed/);
+  assert.doesNotMatch(failed, /newest/);
+  assert.doesNotMatch(summary({ run: { ...run, failed: 0, refused_by_redaction: 2 }, found: [1], closest: false }, "daily limit"), /newest/);
+  assert.match(summary({ run: { ...run, failed: 0, stop: "search spend cap reached" }, found: [1], closest: false }, "daily limit"), /1 found in the newest 22 of 38 messages · stopped at the spend cap/);
+});
+
 test("words given when the picker opens in exact mode are searched exactly from the start", () => {
   assert.match(startActions("/x/herdr-find", "exact", "spend cap"), /rebind\(change\)\+search\('spend 'cap\)/);
   assert.doesNotMatch(startActions("/x/herdr-find", "exact", ""), /search/);
