@@ -195,15 +195,18 @@ test("meaning results come back from the popup's cache after fuzzy search, witho
 });
 
 test("a meaning search whose requests failed is listed but not kept for coming back to", async () => {
-  const standin = await startStandin({ judge: () => 0.9, failFirst: 3 });
-  const world = makeWorld({ meaning: { endpoint: standin.url } });
+  // The newest batch uses up its retries; the older ones, which hold the answer, succeed
+  const standin = await startStandin({ judge: (search, text) => (text.includes("five dollars a day") ? 0.9 : 0.05), failFirst: 3 });
+  const world = makeWorld({ meaning: { endpoint: standin.url, config: { in_flight: 1 } } });
   try {
     await picker(world, async ({ dir, key, state }) => {
+      await key("scope", ["w2-p1"]);
       await key("meaning", [], "");
       await key("enter", [], "what was the daily limit");
       await picked(world, dir, "_meaning");
-      assert.equal(standin.bodies.length, 3);
-      assert.equal(await picked(world, dir, "_results"), "");
+      const asked = standin.bodies.length;
+      assert.ok(asked > 3);
+      assert.match(stripAnsi(await picked(world, dir, "_results")), /90% reviewer +claude\s+Let's cap it at five dollars a day/);
       await key("cycle", [], "");
       await key("cycle", [], "what was the daily limit");
       assert.match(await key("cycle", [], "what was the daily limit"), /change-prompt\(meaning> \)/);
@@ -211,7 +214,7 @@ test("a meaning search whose requests failed is listed but not kept for coming b
       assert.match(await key("enter", [], "what was the daily limit"), /_meaning\)/);
       await picked(world, dir, "_meaning");
       assert.match(stripAnsi(await picked(world, dir, "_results")), /90%/);
-      assert.ok(standin.bodies.length > 3);
+      assert.ok(standin.bodies.length > asked);
     });
   } finally {
     world.cleanup();

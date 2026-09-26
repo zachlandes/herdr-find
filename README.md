@@ -98,7 +98,8 @@ Until then, meaning mode says which of these is missing.
   Its `forbidden` patterns are a last check: if one still matches after redaction, that request is not sent.
 - The record of each search keeps counts, time and cost only, never your words or any message text.
 - A search that read everything it was asked to is kept while the popup is open, so switching to fuzzy or exact search and back shows its results again without asking again or paying again.
-  A search that was stopped, reached a cap, or had requests fail or held back is not kept; alt-m and enter always run a new search.
+  Coming back to meaning search with ctrl-s or alt-m, with the same words and scope, shows the kept results; enter always runs a new search.
+  A search that was stopped, reached a cap, or had requests fail or held back is still listed when it ends, but is not shown again when you come back to meaning search.
   It is kept in the popup's own private temporary folder as message ids, scores and counts only, and is removed when the popup closes.
 
 ### What it costs
