@@ -97,7 +97,8 @@ Until then, meaning mode says which of these is missing.
   Your own list then replaces what no pattern can know, such as names, customers and internal hosts; see [`examples/redaction.json`](examples/redaction.json).
   Its `forbidden` patterns are a last check: if one still matches after redaction, that request is not sent.
 - The record of each search keeps counts, time and cost only, never your words or any message text.
-- A finished search is kept while the popup is open, so switching to fuzzy or exact search and back shows its results again without asking again or paying again.
+- A search that read everything it was asked to is kept while the popup is open, so switching to fuzzy or exact search and back shows its results again without asking again or paying again.
+  A search that was stopped, reached a cap, or had requests fail or held back is not kept; alt-m and enter always run a new search.
   It is kept in the popup's own private temporary folder as message ids, scores and counts only, and is removed when the popup closes.
 
 ### What it costs

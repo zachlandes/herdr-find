@@ -180,9 +180,38 @@ test("meaning results come back from the popup's cache after fuzzy search, witho
       assert.equal(await picked(world, dir, "_results"), first);
       assert.equal(standin.bodies.length, asked);
 
-      // alt-m still starts a new search rather than showing the same results
+      // alt-m starts a new search, and enter runs it afresh even for the same words
       assert.match(await key("meaning", [], ""), /change-prompt\(meaning> \)/);
       assert.equal(state().phase, "ask");
+      assert.match(await key("enter", [], "what was the daily limit"), /reload\('.*' '\/x\/herdr-find' _meaning\)/);
+      assert.equal(state().phase, "running");
+      await picked(world, dir, "_meaning");
+      assert.ok(standin.bodies.length > asked);
+    });
+  } finally {
+    world.cleanup();
+    await standin.close();
+  }
+});
+
+test("a meaning search whose requests failed is listed but not kept for coming back to", async () => {
+  const standin = await startStandin({ judge: () => 0.9, failFirst: 3 });
+  const world = makeWorld({ meaning: { endpoint: standin.url } });
+  try {
+    await picker(world, async ({ dir, key, state }) => {
+      await key("meaning", [], "");
+      await key("enter", [], "what was the daily limit");
+      await picked(world, dir, "_meaning");
+      assert.equal(standin.bodies.length, 3);
+      assert.equal(await picked(world, dir, "_results"), "");
+      await key("cycle", [], "");
+      await key("cycle", [], "what was the daily limit");
+      assert.match(await key("cycle", [], "what was the daily limit"), /change-prompt\(meaning> \)/);
+      assert.equal(state().phase, "ask");
+      assert.match(await key("enter", [], "what was the daily limit"), /_meaning\)/);
+      await picked(world, dir, "_meaning");
+      assert.match(stripAnsi(await picked(world, dir, "_results")), /90%/);
+      assert.ok(standin.bodies.length > 3);
     });
   } finally {
     world.cleanup();
