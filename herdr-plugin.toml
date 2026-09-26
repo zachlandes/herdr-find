@@ -1,6 +1,6 @@
 id = "zachlandes.find"
 name = "Find"
-version = "0.1.0"
+version = "0.2.0"
 min_herdr_version = "0.9.0"
 description = "Search what your open agents said: fuzzy, exact, or by meaning"
 platforms = ["linux", "macos"]
