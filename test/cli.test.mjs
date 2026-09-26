@@ -206,7 +206,7 @@ test("an fzf older than the one the bindings need is refused before the search o
     symlinkSync(process.execPath, path.join(world.root, ".local", "bin", "node"));
     const result = await openPlugin(world, world.root, "0.72.0");
     assert.equal(result.code, 2);
-    assert.match(result.stderr, /needs fzf 0\.73\.0 or newer/);
+    assert.match(result.stderr, /^herdr-find: needs fzf 0\.73\.0 or newer on your PATH$/m);
     assert.equal(result.fzfStarted, false);
   } finally {
     world.cleanup();
