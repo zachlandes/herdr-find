@@ -13,7 +13,7 @@ if (group === "agent" && verb === "list") reply({ type: "agent_list", agents: st
 else if (group === "pane" && verb === "list") reply({ type: "pane_list", panes: state.panes });
 else if (group === "workspace" && verb === "list") reply({ type: "workspace_list", workspaces: state.workspaces ?? [] });
 else if (group === "pane" && verb === "read") process.stdout.write(state.paneText?.[target] ?? "");
-else if ((group === "agent" || group === "tab") && verb === "focus") reply({ type: "ok" });
+else if (["agent", "tab", "workspace"].includes(group) && verb === "focus") reply({ type: "ok" });
 else {
   process.stderr.write(`{"error":{"code":"unknown","message":"fake herdr does not know ${group} ${verb}"}}\n`);
   process.exit(1);

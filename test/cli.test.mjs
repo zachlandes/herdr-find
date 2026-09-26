@@ -81,3 +81,16 @@ test("a scope naming an agent that is not open is refused", async () => {
     world.cleanup();
   }
 });
+
+test("going to an agent brings its workspace and tab on screen before focusing it", async () => {
+  const world = makeWorld();
+  try {
+    const { focusPane } = await import("../lib/herdr.mjs");
+    const agent = world.state.agents.find((entry) => entry.name === "deploy");
+    await focusPane({ ...agent, agent: true }, { env: world.env });
+    const calls = readFileSync(world.env.FAKE_HERDR_LOG, "utf8").trim().split("\n").map((line) => JSON.parse(line).slice(0, 2).join(" "));
+    assert.deepEqual(calls, ["workspace focus", "tab focus", "agent focus"]);
+  } finally {
+    world.cleanup();
+  }
+});
