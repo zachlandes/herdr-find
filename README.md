@@ -53,8 +53,12 @@ height = "85%"
 | `alt-f` `alt-e` `alt-m` | Go straight to fuzzy, exact or meaning search. |
 | `ctrl-o` | Change what is searched: this pane, then all open agents, then just the agent of the line you are on. |
 | `enter` | Open the line in its whole conversation, at that line (`q` comes back). In meaning search, run the search first. |
+| `ctrl-y` | Copy the whole highlighted message, with its original line breaks. |
 | `alt-enter` | Go to that agent's pane. |
 | `esc` | Close. |
+
+Copy uses `pbcopy` on macOS, then `wl-copy` or `xclip` where available, and reports the result in the preview border.
+The popup captures the mouse like fzf; Option-drag or Shift-drag selects text natively, depending on the terminal.
 
 ## What it searches
 

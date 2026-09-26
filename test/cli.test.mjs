@@ -123,9 +123,9 @@ function pluginPaneCommand() {
 const script = (file, text) => { mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, `#!/bin/sh\n${text}\n`); chmodSync(file, 0o755); };
 
 // Opens the popup as herdr does, with only the system PATH, and fzf standing in as ~/.local/bin/fzf
-async function openPlugin(world, home = world.root, fzfVersion = FZF_MIN.join(".")) {
+async function openPlugin(world, home = world.root, fzfVersion = FZF_MIN.join("."), onOpen = "") {
   const fzfLog = path.join(world.root, "fzf.log");
-  script(path.join(home, ".local", "bin", "fzf"), `if [ "$1" = --version ]; then echo "${fzfVersion} (test)"; exit 0; fi\necho started > "${fzfLog}"\nexit 130`);
+  script(path.join(home, ".local", "bin", "fzf"), `if [ "$1" = --version ]; then echo "${fzfVersion} (test)"; exit 0; fi\necho started > "${fzfLog}"\n${onOpen}\nexit 130`);
   const [command, ...args] = pluginPaneCommand();
   const result = await new Promise((resolve) => {
     execFile(command, args, { cwd: ROOT, env: { ...world.env, HOME: home, PATH: "/usr/bin:/bin:/usr/sbin:/sbin" } }, (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stderr }));
@@ -138,9 +138,15 @@ test("the plugin's popup finds node and fzf when herdr gives it only the system 
   try {
     mkdirSync(path.join(world.root, ".local", "bin"), { recursive: true });
     symlinkSync(process.execPath, path.join(world.root, ".local", "bin", "node"));
-    const result = await openPlugin(world);
+    const clipboard = path.join(world.root, "clipboard");
+    script(path.join(world.root, ".local", "bin", "pbcopy"), `/bin/cat > "${clipboard}"`);
+    const result = await openPlugin(world, world.root, FZF_MIN.join("."), `node "$HERDR_FIND_SCRIPT" _items > "$HERDR_FIND_RUN/rows"
+key=$(head -1 "$HERDR_FIND_RUN/rows" | cut -f1)
+line=$(head -1 "$HERDR_FIND_RUN/rows" | cut -f2)
+node "$HERDR_FIND_SCRIPT" _copy "$key" "$line"`);
     assert.equal(result.code, 0, result.stderr);
     assert.ok(result.fzfStarted);
+    assert.match(readFileSync(clipboard, "utf8"), /failed to push some refs/);
   } finally {
     world.cleanup();
   }
