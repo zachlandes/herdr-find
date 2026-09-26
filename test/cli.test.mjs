@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { stripAnsi } from "../lib/gather.mjs";
 import { MeaningOffError, runMeaning } from "../lib/meaning/run.mjs";
 import { LEDGER_FILE, spentInLastDay } from "../lib/meaning/search.mjs";
+import { FZF_MIN, fzfArgs } from "../lib/picker.mjs";
 import { createRun, loadState, removeRun } from "../lib/run.mjs";
 import { startStandin } from "./support/jev-standin.mjs";
 import { BIN, makeWorld } from "./support/world.mjs";
@@ -122,9 +123,9 @@ function pluginPaneCommand() {
 const script = (file, text) => { mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, `#!/bin/sh\n${text}\n`); chmodSync(file, 0o755); };
 
 // Opens the popup as herdr does, with only the system PATH, and fzf standing in as ~/.local/bin/fzf
-async function openPlugin(world, home = world.root) {
+async function openPlugin(world, home = world.root, fzfVersion = FZF_MIN.join(".")) {
   const fzfLog = path.join(world.root, "fzf.log");
-  script(path.join(home, ".local", "bin", "fzf"), `if [ "$1" = --version ]; then echo "0.65.0 (test)"; exit 0; fi\necho started > "${fzfLog}"\nexit 130`);
+  script(path.join(home, ".local", "bin", "fzf"), `if [ "$1" = --version ]; then echo "${fzfVersion} (test)"; exit 0; fi\necho started > "${fzfLog}"\nexit 130`);
   const [command, ...args] = pluginPaneCommand();
   const result = await new Promise((resolve) => {
     execFile(command, args, { cwd: ROOT, env: { ...world.env, HOME: home, PATH: "/usr/bin:/bin:/usr/sbin:/sbin" } }, (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stderr }));
@@ -196,4 +197,29 @@ test("going to an agent brings its workspace and tab on screen before focusing i
   } finally {
     world.cleanup();
   }
+});
+
+test("an fzf older than the one the bindings need is refused before the search opens", async () => {
+  const world = makeWorld();
+  try {
+    mkdirSync(path.join(world.root, ".local", "bin"), { recursive: true });
+    symlinkSync(process.execPath, path.join(world.root, ".local", "bin", "node"));
+    const result = await openPlugin(world, world.root, "0.72.0");
+    assert.equal(result.code, 2);
+    assert.match(result.stderr, /needs fzf 0\.73\.0 or newer/);
+    assert.equal(result.fzfStarted, false);
+  } finally {
+    world.cleanup();
+  }
+});
+
+// CI installs exactly the fzf named by FZF_MIN, so there this proves the floor accepts every binding
+test("the oldest fzf herdr-find accepts takes every binding it is given", (t) => {
+  const version = spawnSync("fzf", ["--version"], { encoding: "utf8" }).stdout?.match(/(\d+)\.(\d+)\.(\d+)/)?.slice(1).map(Number);
+  if (!version) { t.skip("fzf is not installed"); return; }
+  const args = fzfArgs({ script: BIN, state: { mode: "fuzzy" }, header: "header", startActions: "unbind(change)" });
+  const result = spawnSync("fzf", [...args, "--filter", "tile"], { input: "k\t1\tdeploy claude\tFixed the tile URL\n", encoding: "utf8" });
+  assert.notEqual(result.status, 2, result.stderr);
+  assert.match(result.stdout, /tile URL/);
+  if (process.env.CI) assert.deepEqual(version, FZF_MIN);
 });

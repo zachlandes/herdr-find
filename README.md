@@ -10,7 +10,7 @@ Meaning search is optional, off until you turn it on, and sends nothing until yo
 ## What you need
 
 - herdr 0.9 or newer
-- [fzf](https://github.com/junegunn/fzf) 0.65 or newer on your `PATH`
+- [fzf](https://github.com/junegunn/fzf) 0.73 or newer on your `PATH`
 - Node.js 20 or newer
 - For meaning search only: a [TypeSafe](https://typesafe.ai) API key
 
