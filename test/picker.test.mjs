@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
 import { act, EXACT_SHELL, exactTerms, fzfArgs, handleKey, startActions } from "../lib/picker.mjs";
+import { stripAnsi } from "../lib/gather.mjs";
 import { recordRun } from "../lib/meaning/search.mjs";
 import { createRun, loadState, removeRun } from "../lib/run.mjs";
 import { makeWorld } from "./support/world.mjs";
@@ -38,13 +39,19 @@ async function picker(world, run) {
   }
 }
 
-test("before a meaning search, the most it can cost is capped by what is left of today", async () => {
+const headerLines = (actions) => stripAnsi(actions.match(/change-header.([\s\S]*).$/)[1]).split("\n");
+
+test("before a meaning search, the header shows the estimate, the search cap and what is left today, within a popup's width", async () => {
   const world = makeWorld({ meaning: { endpoint: "http://127.0.0.1:9/v1/systemone" } });
   try {
-    recordRun(world.env.HERDR_FIND_STATE_DIR, { at: new Date().toISOString(), spend: { committed_usd: 0.1995 } });
+    recordRun(world.env.HERDR_FIND_STATE_DIR, { at: new Date().toISOString(), spend: { committed_usd: 0.0133 } });
     await picker(world, async ({ key }) => {
-      assert.match(await key("scope", ["w2-p1"]), /all open agents/);
-      assert.match(await key("meaning", [], ""), /up to USD 0\.0005 · caps USD 0\.02\/search, USD 0\.20\/day \(USD 0\.0005 left\)/);
+      const pane = headerLines(await key("meaning", [], ""));
+      assert.deepEqual(pane.slice(2), ["Type what you mean, then press enter · 6 messages", "under USD 0.001 · never more than USD 0.02 per search · USD 0.186 left today"]);
+      const all = headerLines(await key("scope", ["w2-p1"]));
+      assert.match(all[2], /38 messages$/);
+      assert.match(all[3], /^(under USD 0\.001|about USD 0\.\d{3}) · never more than USD 0\.02 per search · USD 0\.186 left today$/);
+      for (const line of [...pane, ...all]) assert.ok(line.length <= 76, line);
     });
   } finally {
     world.cleanup();
@@ -106,7 +113,7 @@ test("in meaning mode enter runs the search, and the words move from the box to 
   try {
     await picker(world, async ({ key, state }) => {
       const ask = await key("meaning", [], "what was the daily limit");
-      assert.match(ask, /Type what you mean, then press enter · 6 messages · up to USD 0\.\d+ · caps USD 0\.02\/search, USD 0\.20\/day \(USD 0\.20 left\)/);
+      assert.match(ask, /Type what you mean, then press enter · 6 messages\n.* · never more than USD 0\.02 per search · USD 0\.20 left today/);
       assert.equal(await key("enter", [], ""), "ignore");
       const run = await key("enter", [], "what was the daily limit");
       assert.match(run, /change-prompt\(filter> \)/);

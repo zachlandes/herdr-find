@@ -100,8 +100,9 @@ Until then, meaning mode says which of these is missing.
 ### What it costs
 
 Each search stops at a spend cap (USD 0.02 by default), and each day has one too (USD 0.20), both set in `config.json`.
-Before you press enter, meaning mode shows how many messages the scope holds, the most the search can cost, and both caps with what is left of today's, for example `up to USD 0.013 · caps USD 0.02/search, USD 0.20/day (USD 0.187 left)`.
-The most it can cost is the smallest of what those messages could cost, the search cap, and what is left of today's cap.
+Before you press enter, meaning mode shows how many messages the scope holds, about what the search will cost, the search cap and what is left of today's cap, for example `about USD 0.013 · never more than USD 0.02 per search · USD 0.187 left today`.
+The cost shown is an estimate; a request the service has to retry is charged again.
+The caps are the real limit: a search never spends more than its cap or what is left of today's.
 Messages are read newest first, so when a search reaches its cap it is the oldest that go unread, and the result says how many were read.
 
 For a sense of scale, measured on 2026-09-25 over nine open agents holding about 1,000 messages between them: the first matches showed after about 0.4 s, the whole search took 5 to 8 s, and each search cost about USD 0.013.

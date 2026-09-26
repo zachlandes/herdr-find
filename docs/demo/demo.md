@@ -39,7 +39,7 @@ The same words, now matched exactly: the scattered fuzzy matches drop away and o
 ![Exact search, same words](713e5bf2-2026-09-26.png)
 
 ## alt-m: meaning
-Meaning search lists nothing and sends nothing until enter. It first shows how many messages the scope holds and the most the search could cost.
+Meaning search lists nothing and sends nothing until enter. It first shows how many messages the scope holds, about what the search will cost, the most one search may spend, and what is left of today's cap.
 
 ```bash {image}
 ![Meaning search before it runs](04-meaning-before-search.png)

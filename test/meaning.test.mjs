@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { JEV_ENDPOINT, jevEndpoint } from "../lib/meaning/jev.mjs";
 import { createRedactor } from "../lib/meaning/redaction.mjs";
-import { costBoundUsd, LEDGER_FILE, MEANING, recordRun, searchByMeaning, spentInLastDay } from "../lib/meaning/search.mjs";
+import { LEDGER_FILE, MEANING, recordRun, searchByMeaning, spentInLastDay } from "../lib/meaning/search.mjs";
 import { startStandin } from "./support/jev-standin.mjs";
 
 const key = Object.freeze(Object.defineProperty({ source: "test" }, "authorization", { value: "Bearer test-key-not-real", enumerable: false }));
@@ -123,13 +123,32 @@ test("a search books what it spends as it goes, so one killed before it ends sti
   });
 });
 
-test("the cost bound covers every request a search sends", async () => {
-  await withStandin({ judge: () => 0.9 }, async ({ standin, stateDir }) => {
-    const texts = Array.from({ length: 40 }, (_, index) => `Line one of message ${index}. Line two says more. ${"words ".repeat(index * 20)}`);
-    const result = await search(standin, stateDir, { capUsd: 1, dailyCapUsd: 1, items: items(texts) });
-    assert.ok(result.found.length > 1);
-    assert.ok(result.run.spend.committed_usd <= costBoundUsd(items(texts)));
+test("a retried request is charged again, and the search cap still holds", async () => {
+  await withStandin({ judge: () => 0.1, failFirst: 2, status: 503 }, async ({ standin, stateDir }) => {
+    const long = (index) => ({ id: `m${index}`, text: `message ${index} `.repeat(1400) });
+    const result = await search(standin, stateDir, { capUsd: 0.0005, experiment: { ...MEANING, batch: 1, inFlight: 1 }, items: Array.from({ length: 12 }, (_, index) => long(index)) });
+    assert.equal(result.run.stop, "search spend cap reached");
+    assert.ok(standin.bodies.length > result.run.read);
+    assert.ok(result.run.spend.attempts_booked_at_reservation >= 2);
+    assert.ok(result.run.spend.committed_usd <= 0.0005);
   });
+});
+
+test("the day's spend counts only recent runs, however long the ledger has grown", () => {
+  const stateDir = mkdtempSync(path.join(os.tmpdir(), "herdr-find-ledger-"));
+  try {
+    const now = new Date();
+    const old = new Date(now.getTime() - 3 * 24 * 3600 * 1000).toISOString();
+    const lines = Array.from({ length: 2000 }, (_, index) => JSON.stringify({ run_id: `old-${index}`, at: old, spend: { committed_usd: 1 } }));
+    const at = new Date(now.getTime() - 3600 * 1000).toISOString();
+    lines.push(JSON.stringify({ run_id: "recent", at, spend: { committed_usd: 0.004 } }), JSON.stringify({ at, spend: { committed_usd: 0.002 } }));
+    lines.push(...Array.from({ length: 400 }, () => JSON.stringify({ run_id: "recent", at, spend: { committed_usd: 0.004 } })));
+    lines.push(JSON.stringify({ run_id: "recent", at, spend: { committed_usd: 0.005 } }));
+    writeFileSync(path.join(stateDir, LEDGER_FILE), `${lines.join("\n")}\n`);
+    assert.equal(Number(spentInLastDay(stateDir, now).toFixed(6)), 0.007);
+  } finally {
+    rmSync(stateDir, { recursive: true, force: true });
+  }
 });
 
 test("only a loopback address may stand in for the service", () => {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { stripAnsi } from "../lib/gather.mjs";
@@ -9,6 +9,8 @@ import { LEDGER_FILE, spentInLastDay } from "../lib/meaning/search.mjs";
 import { createRun, loadState, removeRun } from "../lib/run.mjs";
 import { startStandin } from "./support/jev-standin.mjs";
 import { BIN, makeWorld } from "./support/world.mjs";
+
+const ROOT = path.join(path.dirname(BIN), "..");
 
 const run = (args, env) => new Promise((resolve) => {
   execFile(process.execPath, [BIN, ...args], { env }, (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stdout, stderr }));
@@ -105,6 +107,33 @@ test("an agent whose conversation file this tool cannot read is searched through
     assert.equal(code, 0);
     assert.match(stdout, /codex +shell +error: failed to push some refs/);
     assert.doesNotMatch(stdout, /not a Claude line/);
+  } finally {
+    world.cleanup();
+  }
+});
+
+// The pane command in herdr-plugin.toml, whose string array reads the same as JSON
+function pluginPaneCommand() {
+  const toml = readFileSync(path.join(ROOT, "herdr-plugin.toml"), "utf8");
+  const panes = toml.slice(toml.indexOf("[[panes]]"), toml.indexOf("[[actions]]"));
+  return JSON.parse(panes.match(/^command = (\[.*\])$/m)[1]);
+}
+
+test("the plugin's popup finds node and fzf when herdr gives it only the system PATH", async () => {
+  const world = makeWorld();
+  try {
+    const bin = path.join(world.root, ".local", "bin");
+    mkdirSync(bin, { recursive: true });
+    symlinkSync(process.execPath, path.join(bin, "node"));
+    const fzfLog = path.join(world.root, "fzf.log");
+    writeFileSync(path.join(bin, "fzf"), `#!/bin/sh\nif [ "$1" = --version ]; then echo "0.65.0 (test)"; exit 0; fi\necho started > "${fzfLog}"\nexit 130\n`);
+    chmodSync(path.join(bin, "fzf"), 0o755);
+    const [command, ...args] = pluginPaneCommand();
+    const result = await new Promise((resolve) => {
+      execFile(command, args, { cwd: ROOT, env: { ...world.env, PATH: "/usr/bin:/bin:/usr/sbin:/sbin" } }, (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stderr }));
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.ok(existsSync(fzfLog));
   } finally {
     world.cleanup();
   }

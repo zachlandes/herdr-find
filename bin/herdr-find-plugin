@@ -1,0 +1,10 @@
+#!/bin/sh
+# herdr may start a plugin's pane with only the system PATH, so add the usual places node and fzf
+# are installed, after whatever PATH it was given
+PATH="$PATH:$HOME/.local/bin:$HOME/bin:$HOME/.fzf/bin:$HOME/.volta/bin:$HOME/.local/share/mise/shims:$HOME/.nix-profile/bin:/opt/homebrew/bin:/usr/local/bin:/home/linuxbrew/.linuxbrew/bin:/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin"
+export PATH
+if ! command -v node >/dev/null 2>&1; then
+  echo "herdr-find: node was not found; install Node.js 20 or newer" >&2
+  exit 127
+fi
+exec node "$(dirname "$0")/herdr-find" "$@"
