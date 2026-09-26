@@ -129,6 +129,14 @@ npm test
 The tests run against a stand-in for herdr and a stand-in for TypeSafe on your own machine, so they need neither a herdr session nor a key.
 `test/fixtures/build.mjs` writes the made-up conversations they search.
 
+## Releasing
+
+Release Please keeps a release PR open from Conventional Commit titles merged into `main`.
+Use `fix:` for a patch, `feat:` for a minor version, and `!` or a `BREAKING CHANGE:` footer for a major version; titles such as `ci:` and `docs:` do not trigger releases on their own.
+The release PR updates `package.json` and `herdr-plugin.toml` together and generates `CHANGELOG.md`; never edit the changelog by hand.
+Merge the release PR only on the maintainer's explicit word: merging it creates a GitHub release and tag on the next workflow run, but does not publish to npm or a marketplace.
+The first herdr-find release must wait until it runs on jevzf's core and the maintainer approves it; do not tag, list it in a marketplace, or announce it before then.
+
 ## Credits
 
 - [fzf](https://github.com/junegunn/fzf) by Junegunn Choi (MIT) does all the fuzzy and exact searching; herdr-find runs it as it is, unchanged.
