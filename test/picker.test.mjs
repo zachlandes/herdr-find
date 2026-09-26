@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import test from "node:test";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { summary } from "../lib/cli.mjs";
-import { act, EXACT_SHELL, exactTerms, fitWidth, fzfArgs, handleKey, headerFor, HEADER_WIDTH, startActions } from "../lib/picker.mjs";
+import { act, EXACT_SHELL, exactTerms, fitWidth, fzfArgs, handleKey, headerFor, HEADER_WIDTH, startActions, summary } from "../lib/picker.mjs";
 import { stripAnsi } from "../lib/gather.mjs";
 import { recordRun } from "../lib/meaning/search.mjs";
 import { createRun, loadState, removeRun } from "../lib/run.mjs";
-import { makeWorld } from "./support/world.mjs";
+import { BIN, makeWorld } from "./support/world.mjs";
 import { startStandin } from "./support/jev-standin.mjs";
 
 test("exact mode turns each word into fzf's exact term, in node and in the shell alike", () => {
@@ -150,6 +149,44 @@ test("ctrl-o goes from this pane to all open agents to the agent under the curso
     });
   } finally {
     world.cleanup();
+  }
+});
+
+// One of the picker's own commands, as fzf runs it inside the search
+const picked = (world, dir, command) => new Promise((resolve, reject) => {
+  execFile(process.execPath, [BIN, command], { env: { ...world.env, HERDR_FIND_RUN: dir } }, (error, stdout) => (error ? reject(error) : resolve(stdout)));
+});
+
+test("meaning results come back from the popup's cache after fuzzy search, without asking the service again", async () => {
+  const standin = await startStandin({ judge: (search, text) => (text.includes("five dollars a day") ? 0.93 : 0.05) });
+  const world = makeWorld({ meaning: { endpoint: standin.url } });
+  try {
+    await picker(world, async ({ dir, key, state }) => {
+      await key("meaning", [], "");
+      await key("enter", [], "what was the daily limit");
+      await picked(world, dir, "_meaning");
+      const first = await picked(world, dir, "_results");
+      assert.match(stripAnsi(first), /93% reviewer +claude\s+Let's cap it at five dollars a day per workspace\./);
+      const asked = standin.bodies.length;
+      assert.ok(asked > 0);
+
+      assert.match(await key("cycle", [], ""), /change-prompt\(fuzzy> \)[\s\S]*change-query\(what was the daily limit\)/);
+      assert.match(await key("cycle", [], "what was the daily limit"), /change-prompt\(exact> \)/);
+      const again = await key("cycle", [], "what was the daily limit");
+      assert.match(again, /change-prompt\(filter> \)/);
+      assert.match(again, /reload\('.*' '\/x\/herdr-find' _results\)/);
+      assert.match(stripAnsi(again), /“what was the daily limit”: 1 found in 6 messages/);
+      assert.equal(state().phase, "results");
+      assert.equal(await picked(world, dir, "_results"), first);
+      assert.equal(standin.bodies.length, asked);
+
+      // alt-m still starts a new search rather than showing the same results
+      assert.match(await key("meaning", [], ""), /change-prompt\(meaning> \)/);
+      assert.equal(state().phase, "ask");
+    });
+  } finally {
+    world.cleanup();
+    await standin.close();
   }
 });
 
