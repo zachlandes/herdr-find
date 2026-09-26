@@ -1,0 +1,9 @@
+{
+  "meaning": {
+    "enabled": true,
+    "key_file": "~/.config/herdr-find/typesafe-api-key",
+    "redaction_file": "~/.config/herdr-find/redaction.json",
+    "search_cap_usd": 0.02,
+    "daily_cap_usd": 0.2
+  }
+}

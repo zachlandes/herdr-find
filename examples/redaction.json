@@ -1,0 +1,11 @@
+{
+  "rules": [
+    ["person", "(?i)\\bjordan (?:lee|l\\.)", "[person]"],
+    ["client", "(?i)\\bacme(?: corp)?\\b", "[client]"],
+    ["domain", "(?i)\\b[a-z0-9-]+\\.internal\\.example\\.com\\b", "[internal host]"]
+  ],
+  "forbidden": [
+    "(?i)jordan lee",
+    "(?i)acme"
+  ]
+}

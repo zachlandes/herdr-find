@@ -1,0 +1,35 @@
+#!/bin/sh
+# herdr may start a plugin's pane with only the system PATH, so put the usual places node and fzf
+# are installed first: the user's own version managers and bin folders, then Homebrew and
+# /usr/local, so an old system node never wins over the one the user installed
+
+newest_nvm() {
+  for dir in "${NVM_DIR:-$HOME/.nvm}"/versions/node/v*/bin; do
+    [ -d "$dir" ] || continue
+    version=${dir%/bin}
+    printf '%s %s\n' "${version##*/versions/node/v}" "$dir"
+  done | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1 | cut -d' ' -f2-
+}
+
+extra=""
+for dir in \
+  "$HOME/.local/bin" "$HOME/bin" "$HOME/.fzf/bin" \
+  "$HOME/.volta/bin" "$(newest_nvm)" \
+  "${FNM_DIR:-$HOME/.local/share/fnm}/aliases/default/bin" "$HOME/Library/Application Support/fnm/aliases/default/bin" \
+  "${ASDF_DATA_DIR:-$HOME/.asdf}/shims" "$HOME/.local/share/mise/shims" "$HOME/.nix-profile/bin" \
+  /opt/homebrew/bin /usr/local/bin /home/linuxbrew/.linuxbrew/bin /nix/var/nix/profiles/default/bin /run/current-system/sw/bin
+do
+  [ -n "$dir" ] && [ -d "$dir" ] && extra="$extra$dir:"
+done
+PATH="$extra$PATH"
+export PATH
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "herdr-find: node was not found; install Node.js 20 or newer" >&2
+  exit 127
+fi
+if ! node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)' 2>/dev/null; then
+  echo "herdr-find: needs Node.js 20 or newer, but $(command -v node) is $(node --version 2>/dev/null)" >&2
+  exit 1
+fi
+exec node "$(dirname "$0")/herdr-find" "$@"

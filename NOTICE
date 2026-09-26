@@ -1,0 +1,11 @@
+herdr-find
+Copyright 2026 Zachary Landes
+
+This product includes prompt wording adapted from Needle by Shubham Saboo,
+awesome-llm-apps (Apache-2.0):
+https://github.com/Shubhamsaboo/awesome-llm-apps/tree/main/advanced_llm_apps/needle
+
+The wording of the meaning-search questions in lib/meaning/prompts.mjs was
+adapted from Needle's passage and sentence questions, from a passage of a web
+page to a piece of terminal history. The 0.58 match threshold also comes from
+Needle.

@@ -1,0 +1,43 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [20, 22, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # The oldest fzf herdr-find accepts, so the tests prove every binding works on it
+      - name: Install fzf at the supported floor
+        shell: bash
+        run: |
+          version=$(node --input-type=module -e 'const m = await import("./lib/picker.mjs"); console.log(m.FZF_MIN.join("."))')
+          case "$RUNNER_OS-$RUNNER_ARCH" in
+            Linux-X64) platform=linux_amd64 ;;
+            macOS-ARM64) platform=darwin_arm64 ;;
+            macOS-X64) platform=darwin_amd64 ;;
+            *) echo "no fzf build for $RUNNER_OS-$RUNNER_ARCH" >&2; exit 1 ;;
+          esac
+          archive="fzf-$version-$platform.tar.gz"
+          cd "$RUNNER_TEMP"
+          curl -fsSLO "https://github.com/junegunn/fzf/releases/download/v$version/$archive"
+          curl -fsSLO "https://github.com/junegunn/fzf/releases/download/v$version/fzf_${version}_checksums.txt"
+          grep " $archive\$" "fzf_${version}_checksums.txt" | shasum -a 256 -c -
+          mkdir -p fzf-bin && tar -xzf "$archive" -C fzf-bin
+          echo "$RUNNER_TEMP/fzf-bin" >> "$GITHUB_PATH"
+      - run: fzf --version
+      - run: npm test

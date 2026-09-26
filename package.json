@@ -1,0 +1,27 @@
+{
+  "name": "herdr-find",
+  "version": "0.1.0",
+  "description": "Search what your agents in herdr said: fuzzy, exact, or by meaning",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "herdr-find": "bin/herdr-find"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "herdr-plugin.toml",
+    "NOTICE",
+    "examples"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zachlandes/herdr-find.git"
+  }
+}
