@@ -33,13 +33,14 @@ description = "find in open agents"
 and reload herdr's config (`herdr server reload-config`).
 
 herdr-find also works without the plugin, as a plain command.
-Put `bin/herdr-find` on your `PATH` and bind it as a herdr popup:
+Clone this repository and bind its `bin/herdr-find-plugin` as a herdr popup, by its full path.
+herdr may run popups with only the system `PATH`, so that launcher first looks for node and fzf where they are usually installed: your own bin folders, nvm, fnm, asdf, volta, mise, Homebrew and `/usr/local`.
 
 ```toml
 [[keys.command]]
 key = "prefix+f"
 type = "popup"
-command = "herdr-find"
+command = "/path/to/herdr-find/bin/herdr-find-plugin"
 width = "90%"
 height = "85%"
 ```

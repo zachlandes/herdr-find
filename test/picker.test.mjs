@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
-import { act, EXACT_SHELL, exactTerms, fzfArgs, handleKey, startActions } from "../lib/picker.mjs";
+import { mkdirSync } from "node:fs";
+import path from "node:path";
+import { summary } from "../lib/cli.mjs";
+import { act, EXACT_SHELL, exactTerms, fitWidth, fzfArgs, handleKey, headerFor, HEADER_WIDTH, startActions } from "../lib/picker.mjs";
 import { stripAnsi } from "../lib/gather.mjs";
 import { recordRun } from "../lib/meaning/search.mjs";
 import { createRun, loadState, removeRun } from "../lib/run.mjs";
@@ -52,6 +55,49 @@ test("before a meaning search, the header shows the estimate, the search cap and
       assert.match(all[2], /38 messages$/);
       assert.match(all[3], /^(under USD 0\.001|about USD 0\.\d{3}) · never more than USD 0\.02 per search · USD 0\.186 left today$/);
       for (const line of [...pane, ...all]) assert.ok(line.length <= 76, line);
+    });
+  } finally {
+    world.cleanup();
+  }
+});
+
+test("a long header line is broken between its parts, then between words, and never cut", () => {
+  const line = "Searching for “what was the daily limit we agreed on” · 3 of 80 batches · 5 found · USD 0.0042 so far · ctrl-s stops";
+  const lines = fitWidth(line).split("\n");
+  assert.ok(lines.every((part) => part.length <= HEADER_WIDTH));
+  assert.equal(lines.join(" · "), line);
+  const long = fitWidth(`${"x".repeat(100)} end`, 40).split("\n");
+  assert.deepEqual(long, ["x".repeat(40), "x".repeat(40), `${"x".repeat(20)} end`]);
+});
+
+test("the note that meaning search is off names its file in full, with ~ for the home folder", async () => {
+  const world = makeWorld();
+  try {
+    const config = path.join(world.root, ".config", "herdr", "plugins", "config", "zachlandes.find");
+    mkdirSync(config, { recursive: true });
+    await picker({ ...world, env: { ...world.env, HERDR_FIND_CONFIG_DIR: config } }, async ({ key }) => {
+      const lines = headerLines(await key("meaning", [], ""));
+      assert.ok(lines.includes("~/.config/herdr/plugins/config/zachlandes.find/config.json"), lines.join("\n"));
+      for (const line of lines) assert.ok(line.length <= HEADER_WIDTH, line);
+    });
+  } finally {
+    world.cleanup();
+  }
+});
+
+test("after a meaning search, the summary fits the popup and a small spend never reads as nothing", async () => {
+  const world = makeWorld();
+  try {
+    await picker(world, async ({ dir, key, state }) => {
+      await key("meaning", [], "");
+      const run = { items: 1038, read: 412, stop: "search spend cap reached", refused_by_redaction: 2, failed: 1, elapsed_ms: 6100, spend: { committed_usd: 0.000017 }, caps: { day_usd: 0.2 } };
+      const words = "what was the daily limit we agreed on for each workspace last week";
+      const lines = stripAnsi(await headerFor(dir, state(), world.env, `${summary({ run, found: [1, 2, 3], closest: false }, words)}\nalt-m new search`)).split("\n");
+      for (const line of lines) assert.ok(line.length <= HEADER_WIDTH, line);
+      const shown = lines.join("\n");
+      for (const part of ["stopped at the spend cap", "under USD 0.0001", "alt-m new search", "1 request failed"]) assert.ok(shown.includes(part), part);
+      assert.ok(!shown.includes("USD 0.0000"));
+      assert.match(summary({ run: { ...run, stop: "daily spend cap reached" }, found: [], closest: false }, words), /today's spend cap \(USD 0\.20\)/);
     });
   } finally {
     world.cleanup();

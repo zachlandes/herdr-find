@@ -119,21 +119,55 @@ function pluginPaneCommand() {
   return JSON.parse(panes.match(/^command = (\[.*\])$/m)[1]);
 }
 
+const script = (file, text) => { mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, `#!/bin/sh\n${text}\n`); chmodSync(file, 0o755); };
+
+// Opens the popup as herdr does, with only the system PATH, and fzf standing in as ~/.local/bin/fzf
+async function openPlugin(world) {
+  const fzfLog = path.join(world.root, "fzf.log");
+  script(path.join(world.root, ".local", "bin", "fzf"), `if [ "$1" = --version ]; then echo "0.65.0 (test)"; exit 0; fi\necho started > "${fzfLog}"\nexit 130`);
+  const [command, ...args] = pluginPaneCommand();
+  const result = await new Promise((resolve) => {
+    execFile(command, args, { cwd: ROOT, env: { ...world.env, PATH: "/usr/bin:/bin:/usr/sbin:/sbin" } }, (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stderr }));
+  });
+  return { ...result, fzfStarted: existsSync(fzfLog) };
+}
+
 test("the plugin's popup finds node and fzf when herdr gives it only the system PATH", async () => {
   const world = makeWorld();
   try {
-    const bin = path.join(world.root, ".local", "bin");
-    mkdirSync(bin, { recursive: true });
-    symlinkSync(process.execPath, path.join(bin, "node"));
-    const fzfLog = path.join(world.root, "fzf.log");
-    writeFileSync(path.join(bin, "fzf"), `#!/bin/sh\nif [ "$1" = --version ]; then echo "0.65.0 (test)"; exit 0; fi\necho started > "${fzfLog}"\nexit 130\n`);
-    chmodSync(path.join(bin, "fzf"), 0o755);
-    const [command, ...args] = pluginPaneCommand();
-    const result = await new Promise((resolve) => {
-      execFile(command, args, { cwd: ROOT, env: { ...world.env, PATH: "/usr/bin:/bin:/usr/sbin:/sbin" } }, (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stderr }));
-    });
+    mkdirSync(path.join(world.root, ".local", "bin"), { recursive: true });
+    symlinkSync(process.execPath, path.join(world.root, ".local", "bin", "node"));
+    const result = await openPlugin(world);
     assert.equal(result.code, 0, result.stderr);
-    assert.ok(existsSync(fzfLog));
+    assert.ok(result.fzfStarted);
+  } finally {
+    world.cleanup();
+  }
+});
+
+test("the plugin's popup finds the newest node nvm installed", async () => {
+  const world = makeWorld();
+  try {
+    const versions = path.join(world.root, ".nvm", "versions", "node");
+    script(path.join(versions, "v8.0.0", "bin", "node"), "exit 1");
+    mkdirSync(path.join(versions, "v20.1.0", "bin"), { recursive: true });
+    symlinkSync(process.execPath, path.join(versions, "v20.1.0", "bin", "node"));
+    const result = await openPlugin(world);
+    assert.equal(result.code, 0, result.stderr);
+    assert.ok(result.fzfStarted);
+  } finally {
+    world.cleanup();
+  }
+});
+
+test("the plugin's popup says so when the only node it finds is too old", async () => {
+  const world = makeWorld();
+  try {
+    script(path.join(world.root, ".local", "bin", "node"), `if [ "$1" = --version ]; then echo v12.22.9; fi\nexit 1`);
+    const result = await openPlugin(world);
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /needs Node\.js 20 or newer, but .*node is v12\.22\.9/);
+    assert.ok(!result.fzfStarted);
   } finally {
     world.cleanup();
   }
