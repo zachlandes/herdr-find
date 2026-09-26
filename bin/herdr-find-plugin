@@ -4,7 +4,11 @@
 # /usr/local, so an old system node never wins over the one the user installed
 
 newest_nvm() {
-  ls -d "${NVM_DIR:-$HOME/.nvm}"/versions/node/v*/bin 2>/dev/null | sort -t. -k1.2,1n -k2,2n -k3,3n | tail -n 1
+  for dir in "${NVM_DIR:-$HOME/.nvm}"/versions/node/v*/bin; do
+    [ -d "$dir" ] || continue
+    version=${dir%/bin}
+    printf '%s %s\n' "${version##*/versions/node/v}" "$dir"
+  done | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1 | cut -d' ' -f2-
 }
 
 extra=""

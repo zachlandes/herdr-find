@@ -122,12 +122,12 @@ function pluginPaneCommand() {
 const script = (file, text) => { mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, `#!/bin/sh\n${text}\n`); chmodSync(file, 0o755); };
 
 // Opens the popup as herdr does, with only the system PATH, and fzf standing in as ~/.local/bin/fzf
-async function openPlugin(world) {
+async function openPlugin(world, home = world.root) {
   const fzfLog = path.join(world.root, "fzf.log");
-  script(path.join(world.root, ".local", "bin", "fzf"), `if [ "$1" = --version ]; then echo "0.65.0 (test)"; exit 0; fi\necho started > "${fzfLog}"\nexit 130`);
+  script(path.join(home, ".local", "bin", "fzf"), `if [ "$1" = --version ]; then echo "0.65.0 (test)"; exit 0; fi\necho started > "${fzfLog}"\nexit 130`);
   const [command, ...args] = pluginPaneCommand();
   const result = await new Promise((resolve) => {
-    execFile(command, args, { cwd: ROOT, env: { ...world.env, PATH: "/usr/bin:/bin:/usr/sbin:/sbin" } }, (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stderr }));
+    execFile(command, args, { cwd: ROOT, env: { ...world.env, HOME: home, PATH: "/usr/bin:/bin:/usr/sbin:/sbin" } }, (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stderr }));
   });
   return { ...result, fzfStarted: existsSync(fzfLog) };
 }
@@ -145,14 +145,15 @@ test("the plugin's popup finds node and fzf when herdr gives it only the system 
   }
 });
 
-test("the plugin's popup finds the newest node nvm installed", async () => {
+test("the plugin's popup finds the newest node nvm installed, whatever dots its path holds", async () => {
   const world = makeWorld();
   try {
-    const versions = path.join(world.root, ".nvm", "versions", "node");
-    script(path.join(versions, "v8.0.0", "bin", "node"), "exit 1");
-    mkdirSync(path.join(versions, "v20.1.0", "bin"), { recursive: true });
-    symlinkSync(process.execPath, path.join(versions, "v20.1.0", "bin", "node"));
-    const result = await openPlugin(world);
+    const home = path.join(world.root, "pat.smith");
+    const versions = path.join(home, ".nvm", "versions", "node");
+    for (const old of ["v18.20.4", "v20.1.0"]) script(path.join(versions, old, "bin", "node"), "exit 1");
+    mkdirSync(path.join(versions, "v22.3.0", "bin"), { recursive: true });
+    symlinkSync(process.execPath, path.join(versions, "v22.3.0", "bin", "node"));
+    const result = await openPlugin(world, home);
     assert.equal(result.code, 0, result.stderr);
     assert.ok(result.fzfStarted);
   } finally {
