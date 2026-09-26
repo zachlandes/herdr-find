@@ -27,7 +27,7 @@ test("an action argument is wrapped in brackets it does not contain", () => {
 test("every key the picker binds is one the help names", () => {
   const args = fzfArgs({ script: "/x/herdr-find", state: { mode: "fuzzy" }, header: "h", startActions: "ignore" });
   const keys = args.filter((_, index) => args[index - 1] === "--bind").map((bind) => bind.split(":")[0]);
-  assert.deepEqual(keys, ["ctrl-s", "alt-f", "alt-e", "alt-m", "ctrl-o", "enter", "alt-enter", "change", "start", "every(0.25)"]);
+  assert.deepEqual(keys, ["ctrl-s", "alt-f", "alt-e", "alt-m", "ctrl-o", "enter", "alt-enter", "ctrl-y", "focus", "change", "start", "every(0.25)"]);
 });
 
 async function picker(world, run) {
@@ -49,11 +49,12 @@ test("before a meaning search, the header shows the estimate, the search cap and
     recordRun(world.env.HERDR_FIND_STATE_DIR, { at: new Date().toISOString(), spend: { committed_usd: 0.0133 } });
     await picker(world, async ({ key }) => {
       const pane = headerLines(await key("meaning", [], ""));
-      assert.deepEqual(pane.slice(2), ["Type what you mean, then press enter · 6 messages", "under USD 0.001 · never more than USD 0.02 per search", "USD 0.186 left today"]);
+      assert.deepEqual(pane.slice(3), ["Type what you mean, then press enter · 6 messages", "under USD 0.001 · never more than USD 0.02 per search", "USD 0.186 left today"]);
       const all = headerLines(await key("scope", ["w2-p1"]));
-      assert.match(all[2], /38 messages$/);
-      assert.match(all[3], /^(under USD 0\.001|about USD 0\.\d{3}) · never more than USD 0\.02 per search$/);
-      assert.equal(all[4], "USD 0.186 left today");
+      assert.match(all[3], /38 messages$/);
+      assert.match(all[4], /^(under USD 0\.001|about USD 0\.\d{3}) · never more than USD 0\.02 per search$/);
+      assert.equal(all[5], "USD 0.186 left today");
+      assert.match(pane[2], /ctrl-y copy/);
       // fzf indents each header line by 2 columns inside a popup about 76 wide with a border
       for (const line of [...pane, ...all]) assert.ok(2 + line.length <= 76 - 2, line);
     });
